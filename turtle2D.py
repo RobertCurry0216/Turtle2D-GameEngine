@@ -1,4 +1,6 @@
-from turtle import *
+from turtle import Turtle, Screen
+from math import sin, cos, pi
+from time import time
 
 
 def intersect(v1, v2, v3, v4, overlap_as_intersect=False):
@@ -102,32 +104,54 @@ class Vector:
     def dot(self, other):
         return sum(a*b for a, b in zip(self, other.get())) 
 
+    def rotate(self, theta):
+        a = cos(theta)
+        b = sin(theta)
+        m = [
+            [a,b],
+            [-b,a],
+        ]
+        x = (self.x * m[0][0]) + (self.y * m[1][0])
+        y = (self.x * m[0][1]) + (self.y * m[1][1])
+        return Vector(x, y)
 
-class Polygon(Turtle):
+
+class Player(Turtle):
     """ Basic unit for drawing shapes """
     def __init__(self, 
                 outline, 
                 starting_point=Vector(0,0), 
-                colour=(255,255,255)):
+                colour='white'):
         super().__init__()
         self._outline = outline
         self._location = starting_point
-        self.color = colour
-        self.width = 1
+        self._rotation = 0
+        self.color(colour)
+        self.width(1)
+        self.pu()
+        self.ht()
+
+        Game.players.append(self)
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self._outline}, {self._location}, {self._colour}, {self._closed})'
+        return f'{self.__class__.__name__}({self._outline}, {self._location}, {self._colour})'
 
     def draw(self, solid=False):
-        """ Draws the polygon to the screen"""
+        """ Draws the player to the screen"""
         self.clear()
         self.pu()
-        self.goto(self._outline[0].x, self._outline[0].y)
+        start = self._location + self._outline[0].rotate(self._rotation)
+        self.goto(start.x, start.y)
         self.pd()
-        for p in self._outline:
-            x, y = p + self._location
+        for p in self._outline[1:]:
+            point = p.rotate(self._rotation) + self._location
+            x, y = point
             self.goto(x, y)
         self.pu()
+
+    def update(self, time_delta):
+        self._rotation += time_delta
+        self.draw()
 
 
 class Outline:
@@ -135,7 +159,7 @@ class Outline:
     def __init__(self, *points, closed=True):
         self._points = [Vector(x, y) for x, y in points]
         if closed:
-            self._points.append(self._points[0])
+            self.close()
         
     def __getitem__(self, item):
         return self._points[item]
@@ -143,19 +167,50 @@ class Outline:
     def __setitem__(self, item, value):
         self._points[item] = Vector(value[0], value[1])
 
+    def close(self):
+        self._points.append(self._points[0])
+        return True
+
+
+def Polygon(sides, radius):
+    step = (2*pi) / sides
+    points = []
+    for i in range(sides):
+        x = radius * cos(i * step)
+        y = radius * sin(i * step)
+        points.append(Vector(x, y))
+    return Outline(*points)
+
+
+class Game:
+    players = []
+
+    def __init__(self, height, width, bg=(0,0,0), title='Turtle2D Engine'):
+        self._wn = Screen()
+        self._wn.setup(width + 20, height + 20)
+        self._wn.screensize(width, height)
+        self._wn.bgcolor(bg)
+        self._wn.tracer(0)
+        self._wn.title(title)
+        self._time = None
+
+    def game_loop(self):
+        while True:
+            if self._time:
+                t = time()
+                td = t - self._time
+                self._time = t
+                for player in self.players:
+                    player.update(td)
+            else:
+                self._time = time()
+            self._wn.update()
 
 
 if __name__ == '__main__':
-    wn = Screen()
-    wn.setup(800, 800)
-    wn.screensize(800, 800)
-    wn.bgcolor(0,0,0)
-    wn.tracer(0)
-    wn.title('Turtle2D Engine')
+    game = Game(600, 800)
 
-    o = Outline((-10,-10),(10,10), (0,0))
-    a = Polygon(o, Vector(0, 0))
+    Player(Polygon(12, 100), Vector(0, 0))
+    Player(Polygon(4, 100), Vector(0, -100))
 
-    while True:
-        a.draw()
-        wn.update()
+    game.game_loop()
