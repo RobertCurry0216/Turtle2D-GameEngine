@@ -1,12 +1,20 @@
 from turtle import Turtle, Screen
 from math import sin, cos, pi
-from time import time
+from time import time, sleep
 
 
 def intersect(v1, v2, v3, v4, overlap_as_intersect=False):
     """ find the intersection point between 2 lines 
     [v1, v2] = line 1
-    [v3, v4] = line 2 """
+    [v3, v4] = line 2 
+       v1    v4
+        \   /
+         \ /
+          x  
+         / \
+        /   \
+      v3      v2
+    """
 
     def is_zero(a):
         zero = 1 ** (-10)
@@ -105,6 +113,7 @@ class Vector:
         return sum(a*b for a, b in zip(self, other.get())) 
 
     def rotate(self, theta):
+        # theta -= (pi/2)
         a = cos(theta)
         b = sin(theta)
         m = [
@@ -126,6 +135,7 @@ class Player(Turtle):
         self._outline = outline
         self._location = starting_point
         self._rotation = 0
+        self._size = 0
         self.color(colour)
         self.width(1)
         self.pu()
@@ -149,27 +159,56 @@ class Player(Turtle):
             self.goto(x, y)
         self.pu()
 
-    def update(self, time_delta):
+    def update(self, time_delta=None):
         self._rotation += time_delta
         self.draw()
 
+    def screenloop(self):
+        sw = Game.screenwidth + self._size * 2
+        sh = Game.screenheight + self._size * 2
 
-class Outline:
+        if self._location.x < -sw/2:
+            self._location.x += sw
+        elif self._location.x > sw/2:
+            self._location.x -= sw
+        if self._location.y < -sh/2:
+            self._location.y += sh
+        elif self._location.y > sh/2:
+            self._location.y -= sh
+
+    def collision(self, other):
+        for p1, p2 in zip(self._outline, self._outline[1:]):
+            p1 = p1.rotate(self._rotation) + self._location
+            p2 = p2.rotate(self._rotation) + self._location
+            for o1, o2 in zip(other._outline, other._outline[1:]):
+                o1 = o1.rotate(other._rotation) + other._location
+                o2 = o2.rotate(other._rotation) + other._location
+                if intersect(p1,p2,o1,o2):
+                    return True
+        return False
+
+    def die(self):
+        Game.players.remove(self)
+        self.clear()
+
+
+class Outline(list):
     """ class defining the outline of a shape """
-    def __init__(self, *points, closed=True):
-        self._points = [Vector(x, y) for x, y in points]
+    def __init__(self, *points, closed=False):
+        super().__init__([Vector(x, y) for x, y in points])
         if closed:
             self.close()
         
-    def __getitem__(self, item):
-        return self._points[item]
-
-    def __setitem__(self, item, value):
-        self._points[item] = Vector(value[0], value[1])
-
-    def close(self):
-        self._points.append(self._points[0])
-        return True
+    def close(self, extend=False):
+        if self[0] != self[-1]:
+            if extend:
+                self.append(self[0])
+            else:
+                self[-1] = self[0]
+    
+    def scale(self, num):
+        for i, v in enumerate(self):
+            self[i] = v * num
 
 
 def Polygon(sides, radius):
@@ -179,38 +218,49 @@ def Polygon(sides, radius):
         x = radius * cos(i * step)
         y = radius * sin(i * step)
         points.append(Vector(x, y))
-    return Outline(*points)
+    outline = Outline(*points)
+    outline.close(True)
+    return outline
 
 
 class Game:
     players = []
+    screenwidth = 0
+    screenheight = 0
+    _time = 0
+    _wn = None
 
-    def __init__(self, height, width, bg=(0,0,0), title='Turtle2D Engine'):
-        self._wn = Screen()
-        self._wn.setup(width + 20, height + 20)
-        self._wn.screensize(width, height)
-        self._wn.bgcolor(bg)
-        self._wn.tracer(0)
-        self._wn.title(title)
-        self._time = None
+    @classmethod
+    def setup(cls, height, width, bg=(0,0,0), title='Turtle2D Engine'):
+        cls._wn = Screen()
+        cls._wn.setup(width + 20, height + 20)
+        cls._wn.screensize(width, height)
+        cls._wn.bgcolor(bg)
+        cls._wn.tracer(0)
+        cls._wn.title(title)
+        cls._time = None
+        cls.screenwidth = width
+        cls.screenheight = height
+        cls._wn.listen()
 
-    def game_loop(self):
+    @classmethod
+    def game_loop(cls):
+        """ Calls the update function on all players passing in the time delta since the last frame """
         while True:
-            if self._time:
+            if cls._time:
                 t = time()
-                td = t - self._time
-                self._time = t
-                for player in self.players:
+                td = t - cls._time
+                cls._time = t
+                for player in cls.players:
                     player.update(td)
             else:
-                self._time = time()
-            self._wn.update()
+                cls._time = time()
+            cls._wn.update()
 
 
 if __name__ == '__main__':
-    game = Game(600, 800)
-
+    Game.setup(600, 800)
     Player(Polygon(12, 100), Vector(0, 0))
-    Player(Polygon(4, 100), Vector(0, -100))
+    Player(Polygon(4, 75), Vector(0, -100))
+    Game.game_loop()
 
-    game.game_loop()
